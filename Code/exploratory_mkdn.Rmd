@@ -1,0 +1,142 @@
+---
+title: "Rideshare Exploratory Analysis"
+author: "Team 16"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Exploratory
+
+This part aims to look for specific pattern from the [Austin rideshare dataset](https://data.world/andytryba/rideaustin) to identify possible features to be used for regression model analysis.
+
+Download the "RideAustin_Weather" csv file from the link location and save that under "Data" folder. The code file is to be downloaded into "Code" folder. 
+
+Set Working Directory to the current directory under "Code" folder path
+
+### Call needed libarady and read data into a dataframe
+
+```{r datasetup, message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(gridExtra)
+library(tidyverse)
+library(lubridate)
+```
+
+```{r read_data}
+rideshare <- read.csv('../Data/RideAustin_Weather.csv')
+
+summary(rideshare)
+```
+
+## Data Wrangling & Transformation
+
+From the summary output above, column **distance_traveled** represent the ride distance in meters. The biggest value amount to 400km+, which could be data mistakes. Looking at the quantile, 75% of the data fall below 11km. An assumption is made that passengers would not consider public transportation if the travel distance is >15km.
+
+Hence, data is limited to rides <15km distance traveled. For the easy of view, converting distance_traveled into a new column dist_km by dividing value by 1000. Visualize the distribution of distance traveled by km.
+
+
+```{r filter, echo=FALSE}
+rideshare_filter <- rideshare %>% filter(distance_travelled < 15000)
+rideshare_filter <- rideshare %>% filter(distance_travelled < 20000)
+rideshare_filter$dist_km <- rideshare_filter$distance_travelled/1000
+
+dist_travel <- ggplot(rideshare_filter, aes(dist_km)) + geom_histogram(binwidth = 1) +
+  labs(title = "Distance Distribution by ride share trips",
+    x = "Distance Traveled (km)", y = "# of Trips")
+
+dist_travel_cum <- ggplot(rideshare_filter, aes(dist_km)) + stat_ecdf(geom = 'step') +
+  labs(title = "Cumlative % for ride share trips",
+       x = "Distance Traveled (km)", y = "% to total")
+
+grid.arrange(dist_travel, dist_travel_cum, ncol=2)
+
+```
+
+75% of the trips are within 10km. Most bus services probably has route that covers such distance. The question then become why wouldn't a passenger choose to take public transportation.
+
+Few factors are being considered as follow:
+
+* Time of the day
+* Travel duration (assume passengers tolerance of traveled time is < 2 hours)
+* Day of the week
+* Weather conditions (if impact Day distribution)
+
+```{r feature, echo=FALSE, warning = FALSE}
+# Obtain day of week
+rideshare_filter$dow <- wday(ymd(rideshare_filter$Date), label = TRUE)
+# Obtain month
+rideshare_filter$mo <- month(ymd(rideshare_filter$Date), label = TRUE)
+
+# Convert start and end time text into datetime object
+
+rideshare_filter$start_ts <- as.POSIXct(rideshare_filter$started_on,
+  tz = Sys.timezone())
+rideshare_filter$end_ts <- as.POSIXct(rideshare_filter$completed_on,
+  tz = Sys.timezone())
+
+# Obtain hour of the day
+rideshare_filter$hour <- rideshare_filter$start_ts %>%
+  hour()
+
+# Calculate time traveled
+rideshare_filter$ts_travel <- difftime(rideshare_filter$end_ts,
+  rideshare_filter$start_ts, units = "mins")
+
+# Limit travel time to be less than 120 minutes
+rideshare_ts <- rideshare_filter %>%
+  filter(ts_travel > 0 & ts_travel < 120)
+
+
+dist_ts <- ggplot(rideshare_ts, aes(ts_travel)) + stat_ecdf(geom = "step") +
+  labs(title = "Time Traveled by ride share trips",
+       x = "Time (mins)", y = "% to total")
+
+day_count <- ggplot(rideshare_filter, aes(x = dow)) + geom_bar() +
+  labs(title = "Ride share trips distribution by Day",
+       x = "Day of Week", y = "# Trip")
+
+
+weather_fog <- day_count + facet_grid(vars(Fog)) +
+  labs(title = "Day distribution conditioned on Fog",
+       x = "Day", y = "# Trip")
+
+weather_thunder <- day_count + facet_grid(vars(Thunder)) +
+  labs(title = "Day distribution conditioned on Thunder",
+       x = "Day", y = "# Trip")
+
+hour_count <- ggplot(rideshare_filter, aes(x = hour)) + geom_bar() +
+  labs(title = "Time of Day",
+       x = "Hour", y = "# of Trip")
+
+
+grid.arrange(hour_count, dist_ts, day_count, ncol=2, nrow=2)
+
+grid.arrange(weather_fog, weather_thunder, ncol=1, nrow=2)
+```
+
+## Observations
+
+* Ride share tend to be more populated around early morning time and late evening
+  * Hypothesis to Test: public transportation service hours impact passenger choice
+* Almost 90% of rideshare complete in < 25 minutes
+  * Hypothesis to Test: travel time in public transportation impact passenger choice
+* Ride share happen more frequently over weekend
+  * Hypothesis to Test: public transportation frequency during weekend impact passenger choice
+  * Hypothesis to Test: ride share over weekend is more cost effective in respect to time traveled than public transportation
+* Do not observe significant distribution with/without weather conditions
+  * Hypothesis to Test: Passenger preference to use rideshare is not impacted by weather conditions
+  
+## Next Steps
+
+Similiar exploration will need to be done on bus ride data set, and run correlation test with rideshare data to identify potential relationships
+
+**Anticipated Hypothesis:**
+
+* Control on day of week, hour of day, and weather condition, higher bus ride volume lead to lower ride share volume
+* For the same from and to location, the longer the difference in time among ride share and public transposition, the higher the ride share volume
