@@ -3,7 +3,7 @@ rm(list = ls())
 
 library(dplyr)
 
-austin_data <- read.csv("RideAustin_Weather.csv")
+austin_data <- read.csv("RideAustin_Weather with dow and hour.csv")
 capmetro_stops <- read.csv("Austin capmetro stops.csv")
 capmetro_rides <- read.csv("CapMetro ridership all by latlong.csv")
 capmetro_dow_hour <- read.csv("CapMetro ridership all by latlong dow hour.csv")
