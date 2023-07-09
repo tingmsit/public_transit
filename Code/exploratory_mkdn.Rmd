@@ -1,5 +1,5 @@
 ---
-title: "Rideshare Exploratory Analysis"
+title: "Rideshare & Bus Ride Exploratory Analysis"
 author: "Team 16"
 output: html_document
 date: "`r Sys.Date()`"
@@ -8,16 +8,17 @@ date: "`r Sys.Date()`"
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+## Rideshare
 
-## Data Exploratory
+### Data Exploratory
 
 This part aims to look for specific pattern from the [Austin rideshare dataset](https://data.world/andytryba/rideaustin) to identify possible features to be used for regression model analysis.
 
-Download the "RideAustin_Weather" csv file from the link location and save that under "Data" folder. The code file is to be downloaded into "Code" folder. 
+**Instruction**: Download the "RideAustin_Weather" csv file from the link location and save that under "Data" folder. The code file is to be downloaded into "Code" folder. 
 
 Set Working Directory to the current directory under "Code" folder path
 
-### Call needed libarady and read data into a dataframe
+#### Call needed libarady and read data into a dataframe
 
 ```{r datasetup, message=FALSE, warning=FALSE}
 library(dplyr)
@@ -34,7 +35,7 @@ rideshare <- read.csv('../Data/RideAustin_Weather.csv')
 summary(rideshare)
 ```
 
-## Data Wrangling & Transformation
+### Data Wrangling & Transformation
 
 From the summary output above, column **distance_traveled** represent the ride distance in meters. The biggest value amount to 400km+, which could be data mistakes. Looking at the quantile, 75% of the data fall below 11km. An assumption is made that passengers would not consider public transportation if the travel distance is >15km.
 
@@ -120,7 +121,7 @@ grid.arrange(hour_count, dist_ts, day_count, ncol=2, nrow=2)
 grid.arrange(weather_fog, weather_thunder, ncol=1, nrow=2)
 ```
 
-## Observations
+### Observations
 
 * Ride share tend to be more populated around early morning time and late evening
   * Hypothesis to Test: public transportation service hours impact passenger choice
@@ -132,11 +133,58 @@ grid.arrange(weather_fog, weather_thunder, ncol=1, nrow=2)
 * Do not observe significant distribution with/without weather conditions
   * Hypothesis to Test: Passenger preference to use rideshare is not impacted by weather conditions
   
-## Next Steps
+## Bus Ride
 
-Similiar exploration will need to be done on bus ride data set, and run correlation test with rideshare data to identify potential relationships
+Similiar explorations is done on the CapMetro ridership volume [dataset](https://data.texas.gov/Transportation/CapMetro-Shapefiles-AUGUST-2017/5d4c-snum)
+.
 
-**Anticipated Hypothesis:**
+**Instruction**: After downloading the shape file (ths analysis uses August 2017 data) save that under "Data" folder. 
+
+#### Read Data into dataframe
+```{r read_bus}
+capmetro_dow_hour <- read.csv("../Data/CapMetro ridership all by latlong dow hour.csv")
+
+```
+
+#### Perform similiar Visualization as shareride
+
+* Group bus ride volume group by day of week and hour of day
+* Sum riders volume based on get_on bus metric to obtain total passengers
+* Estimate bus freqency by assuming one row is one bus count
+
+```{r group, echo=FALSE, warning = FALSE}
+bus_dow <- capmetro_dow_hour %>%
+  group_by(start_time_dayofwk) %>%
+  summarize(ride = sum(rides_on), n = n()) %>%
+  mutate(dow = wday(start_time_dayofwk, label = TRUE))
+
+dow_ride <- ggplot(bus_dow, aes(dow, ride)) + geom_bar(stat = "identity") +
+  labs(title = "Ride Volume by Day", x = "Day of Week", y = "# Passengers")
+
+dow_count <- ggplot(bus_dow, aes(dow, n)) + geom_bar(stat = "identity") +
+  labs(title = "Est. Bus Count by Day", x = "Day of Week", y = "Est. Bus Count")
+
+bus_hr <- capmetro_dow_hour %>%
+  group_by(start_time_hour) %>%
+  summarize(ride = sum(rides_on), n = n()) %>% mutate
+
+hr_ride <- ggplot(bus_hr, aes(start_time_hour, ride)) + geom_bar(stat = "identity") +
+  labs(title = "Ride Volume by Hour", x = "Hour", y = "# Passengers")
+
+hr_count <- ggplot(bus_hr, aes(start_time_hour, n)) + geom_bar(stat = "identity") +
+  labs(title = "Est. Bus Count by hour", x = "Hour", y = "Est. Bus Count")
+
+grid.arrange(dow_ride, dow_count, ncol = 2)
+grid.arrange(hr_ride, hr_count, ncol = 2)
+```
+
+### Observations
+
+* Bus rides occur more often during weekdays vs weekend, even though the estimated number of bus count are not significant different among day of week
+* Bus ride occur mostly from 7am to 4pm. Ridership drop drastically till mid-night even though bus frequency stay relative the same throughout the day
+* Minimal bus rides from mid-night to 5am, probably driven by reduce in bus frequency
+
+### Anticipated Hypothesis
 
 * Control on day of week, hour of day, and weather condition, higher bus ride volume lead to lower ride share volume
 * For the same from and to location, the longer the difference in time among ride share and public transposition, the higher the ride share volume

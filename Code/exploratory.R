@@ -8,6 +8,7 @@ library(lubridate)
 library(chron)
 
 rideshare <- read.csv("../Data/RideAustin_Weather.csv")
+capmetro_dow_hour <- read.csv("../Data/CapMetro ridership all by latlong dow hour.csv")
 
 summary(rideshare)
 
@@ -140,3 +141,44 @@ thunder <- rideshare_filter %>%
   group_by(dow) %>%
   summarize(n = n())
 ks.test(no_thunder$n, thunder$n)
+
+# capmetro exploratory
+
+bus_dow <- capmetro_dow_hour %>%
+  group_by(start_time_dayofwk) %>%
+  summarize(ride = sum(rides_on), n = n()) %>%
+  mutate(dow = wday(start_time_dayofwk, label = TRUE))
+
+dow_ride <- ggplot(bus_dow, aes(dow, ride)) + geom_bar(stat = "identity") +
+  labs(title = "Ride Volume by Day", x = "Day of Week", y = "# Passengers")
+
+dow_count <- ggplot(bus_dow, aes(dow, n)) + geom_bar(stat = "identity") +
+  labs(title = "Est. Bus Count by Day", x = "Day of Week", y = "Est. Bus Count")
+
+grid.arrange(dow_ride, dow_count, ncol = 2)
+
+
+bus_hr <- capmetro_dow_hour %>%
+  group_by(start_time_hour) %>%
+  summarize(ride = sum(rides_on), n = n()) %>% mutate
+
+hr_ride <- ggplot(bus_hr, aes(start_time_hour, ride)) + geom_bar(stat = "identity") +
+  labs(title = "Ride Volume by Hour", x = "Hour", y = "# Passengers")
+
+hr_count <- ggplot(bus_hr, aes(start_time_hour, n)) + geom_bar(stat = "identity") +
+  labs(title = "Est. Bus Count by hour", x = "Hour", y = "Est. Bus Count")
+
+grid.arrange(hr_ride, hr_count, ncol = 2)
+
+bus_hr_dow <- capmetro_dow_hour %>%
+  group_by(start_time_dayofwk, start_time_hour) %>%
+  summarize(ride = sum(rides_on), n = n()) %>%   mutate(dow = wday(start_time_dayofwk, label = TRUE))
+
+bus_share <- merge(bus_hr_dow, rideshare_group, by.x = c('start_time_hour', 'dow'), by.y = c('hour', 'dow'))
+# lm_bus_share <- lm(vol ~ ride + hr_cat, data=bus_share)
+# summary(lm_bus_share)
+
+
+# Testing if rides volume is correlated to bus ride
+cor.test(bus_share$vol, bus_share$ride, method='pearson')
+
