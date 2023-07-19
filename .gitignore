@@ -199,3 +199,10 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+Data/RideAustin_Weather.csv
+Data/Austin CapMetro stops.csv
+Data/CapMetro ridership all by latlong dow hour.csv
+Code/Rideshare vs public transportation Ting edit.R
+Code/Calculating CO2 Ting edit.R
+Data/RideAustin_Weather with dow and hour.csv
+Data/master_data_file.csv
