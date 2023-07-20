@@ -27,6 +27,7 @@ library(gridExtra)
 library(plotly)
 library(lubridate)
 library(chron)
+set.seed(123)
 ```
 
 ### Calculating CO2 of rideshare data
@@ -68,8 +69,7 @@ print("km")
 ```
 ```{r read_data}
 rideshare <- read.csv('RideAustin_Weather.csv')
-
-summary(rideshare)
+capmetro_dow_hour <- read.csv("CapMetro ridership all by latlong dow hour.csv")
 ```
 ```{r exploratory}
 #rideshare <- read.csv("RideAustin_Weather.csv")
@@ -87,8 +87,8 @@ rideshare_filter$mo <- month(mdy(rideshare_filter$Date), label = TRUE)
 
 # Convert start and end time text into datetime object
 
-rideshare_filter$start_ts <- as.POSIXct(rideshare_filter$started_on)
-rideshare_filter$end_ts <- as.POSIXct(rideshare_filter$completed_on)
+rideshare_filter$start_ts <- as.POSIXct(rideshare_filter$started_on, format = "%m/%d/%Y %H:%M")
+rideshare_filter$end_ts <- as.POSIXct(rideshare_filter$completed_on, format = "%m/%d/%Y %H:%M")
 
 # Obtain hour of the day
 rideshare_filter$hour <- rideshare_filter$start_ts %>%
@@ -182,7 +182,6 @@ thunder_count <- rideshare_filter %>%
   summarise(n = n()) %>%
   filter(Thunder == 1)
 
-seed(123)
 no_fog <- rideshare_filter %>%
   filter(Fog == 0) %>%
   sample_n(size = fog_count$n) %>%
@@ -408,104 +407,177 @@ summary(linreg_dow_hour)
 write.csv(merged_data_dow_hour, 'master_data_file.csv')
 ```
 ```{r gridregression}
-grid_map <- read.csv("master_data_file.csv")
-grid <- unique(grid_map[, c("start_location_lat", "start_location_long",
-  "start_grid_cell")])
-
-
-# Ride share data processing
-
 df <- read.csv("RideAustin_Weather.csv")
+
+summary(df)
+# Remove distance which are too long, convert meter to km, and create day of week metric
 rideshare <- df %>%
   filter(distance_travelled < 15000) %>%
-  mutate(dist_km = distance_travelled/1000, dow = wday(ymd(Date),
+  mutate(dist_km = distance_travelled/1000, dow = wday(mdy(Date),
     label = TRUE))
 
-rideshare$start_ts <- as.POSIXct(rideshare$started_on, tz = Sys.timezone())
-rideshare$end_ts <- as.POSIXct(rideshare$completed_on, tz = Sys.timezone())
+rideshare$start_ts <- as.POSIXct(rideshare_filter$started_on, format = "%m/%d/%Y %H:%M")
+rideshare$end_ts <- as.POSIXct(rideshare_filter$completed_on, format = "%m/%d/%Y %H:%M")
 rideshare$ts <- difftime(rideshare$end_ts, rideshare$start_ts,
   units = "mins")
+
+# take out trips that last more than 2 hours
 rideshare <- rideshare %>%
   filter(ts > 0 & ts < 120)
 
 rideshare$hour <- rideshare$started_on %>%
-  as.POSIXct(tz = Sys.timezone()) %>%
+  as.POSIXct(format = "%m/%d/%Y %H:%M") %>%
   hour()
 
-rideshare$wkd <- ifelse((rideshare$dow == "Sun" | rideshare$dow ==
-  "Sat"), "weekend", "weekday")
-rideshare$hr_cat <- ifelse((rideshare$hour >= 6 & rideshare$hour <
-  18), "workhour", "offpeak")
 
 rideshare_gp <- rideshare %>%
-  group_by(start_location_long, start_location_lat, wkd, hr_cat) %>%
+  group_by(dow, hour) %>%
   summarise(ride_vol = n() * 1.4)
-rideshare_gp$ride_vol_norm <- ifelse(rideshare_gp$wkd == "weekend",
-  rideshare_gp$ride_vol/2, rideshare_gp$ride_vol/5)
-rideshare_final <- merge(rideshare_gp, grid, by = c("start_location_long",
-  "start_location_lat"))
 
+
+rideshare_gp$wkd_end <- ifelse((rideshare_gp$dow == "Sun" | rideshare_gp$dow ==
+  "Sat"), "weekend", "weekday")
+rideshare_gp$hr_cat <- ifelse((rideshare_gp$hour < 6), "darkout",
+  ifelse((rideshare_gp$hour >= 6 & rideshare_gp$hour < 12),
+    "rush_hour", ifelse((rideshare_gp$hour >= 12 & rideshare_gp$hour <
+      18), "work_hour", "evening")))
+
+# check significant of day of week and hour of day
+summary(lm(ride_vol ~ wkd_end + hr_cat, data = rideshare_gp))
+
+# K-S Test
+fog_count <- rideshare %>%
+  group_by(Fog) %>%
+  summarise(n = n()) %>%
+  filter(Fog == 1)
+thunder_count <- rideshare %>%
+  group_by(Thunder) %>%
+  summarise(n = n()) %>%
+  filter(Thunder == 1)
+
+set.seed(123)
+no_fog <- rideshare %>%
+  filter(Fog == 0) %>%
+  sample_n(size = fog_count$n) %>%
+  group_by(dow) %>%
+  summarize(n = n())
+fog <- rideshare %>%
+  filter(Fog == 1) %>%
+  group_by(dow) %>%
+  summarize(n = n())
+ks.test(no_fog$n, fog$n)
+
+no_thunder <- rideshare %>%
+  filter(Thunder == 0) %>%
+  sample_n(size = thunder_count$n) %>%
+  group_by(dow) %>%
+  summarize(n = n())
+thunder <- rideshare %>%
+  filter(Thunder == 1) %>%
+  group_by(dow) %>%
+  summarize(n = n())
+ks.test(no_thunder$n, thunder$n)
 
 # Bus ride dataset
 
-capmetro <- read.csv("../Data/CapMetro ridership all by latlong dow hour.csv")
-capmetro$wkd <- ifelse((capmetro$start_time_dayofwk == 6 | capmetro$start_time_dayofwk ==
-  7), "weekend", "weekday")
-capmetro$hr_cat <- ifelse((capmetro$start_time_hour >= 6 & capmetro$start_time_hour <
-  18), "workhour", "offpeak")
-
+capmetro <- read.csv("CapMetro ridership all by latlong dow hour.csv")
+capmetro$dow <- substr(weekdays(as.Date("2017-01-01") + capmetro$start_time_dayofwk),
+  1, 3)
 capmetro_gp <- capmetro %>%
-  group_by(veh_lat_rnd, veh_long_rnd, wkd, hr_cat) %>%
+  group_by(dow, start_time_hour) %>%
   summarize(bus_vol = sum(rides_on))
-capmetro_gp$bus_vol_norm <- ifelse(capmetro_gp$wkd == "weekend",
-  capmetro_gp$bus_vol/2, capmetro_gp$bus_vol/5)
-capmetro_final <- merge(capmetro_gp, grid, by.x = c("veh_lat_rnd",
-  "veh_long_rnd"), by.y = c("start_location_lat", "start_location_long"))
+capmetro_gp$wkd_end <- ifelse((capmetro_gp$dow == "Sat" | capmetro_gp$dow ==
+  "Sun"), "weekend", "weekday")
+capmetro_gp$hr_cat <- ifelse((capmetro_gp$start_time_hour < 6),
+  "darkout", ifelse((capmetro_gp$start_time_hour >= 6 & capmetro_gp$start_time_hour <
+    12), "rush_hour", ifelse((capmetro_gp$start_time_hour >=
+    12 & capmetro_gp$start_time_hour < 18), "work_hour",
+    "evening")))
 
-final_df <- merge(rideshare_final, capmetro_final, by.x = c("start_location_long",
-  "start_location_lat", 'wkd', 'hr_cat', 'start_grid_cell'), by.y = c("veh_long_rnd", "veh_lat_rnd", 'wkd', 'hr_cat', 'start_grid_cell'))
+# combine bus and rideshare dataset to prepare for regression
+final_df <- merge(rideshare_gp, capmetro_gp, by.x = c("wkd_end",
+  "hr_cat", "dow", "hour"), by.y = c("wkd_end", "hr_cat", "dow",
+  "start_time_hour"))
 
-reg <- lm(ride_vol_norm ~ bus_vol_norm + wkd + hr_cat + start_grid_cell, data = final_df)
+# Correlation test
+cor.test(final_df$bus_vol, final_df$ride_vol)
+
+
+reg <- lm(ride_vol ~ bus_vol + wkd_end + hr_cat, data = final_df)
 summary(reg)
 
-spec_reg <- final_df %>% filter(start_grid_cell %in% c('3-A', '3-B'))
-summary(lm(ride_vol_norm ~ bus_vol_norm + hr_cat , data = spec_reg))
+# adding grid to both rideshare and capmetro dataset
+grid_map <- read.csv("master_data_file.csv")
+grid <- unique(grid_map[, c("start_location_lat", "start_location_long",
+                            "start_grid_cell")])
+
+# Note some trips will be dropped as they fall outside the 5x5 grid
+rideshare_1 <- merge(rideshare, grid, by = c("start_location_long",
+  "start_location_lat"))
+
+
+rideshare_1_gp <- rideshare_1 %>%
+  group_by(dow, hour, start_grid_cell) %>%
+  summarise(ride_vol = n() * 1.4)
+
+
+rideshare_1_gp$wkd_end <- ifelse((rideshare_1_gp$dow == "Sun" |
+  rideshare_1_gp$dow == "Sat"), "weekend", "weekday")
+rideshare_1_gp$hr_cat <- ifelse((rideshare_1_gp$hour < 6), "darkout",
+  ifelse((rideshare_1_gp$hour >= 6 & rideshare_1_gp$hour <
+    12), "rush_hour", ifelse((rideshare_1_gp$hour >= 12 &
+    rideshare_1_gp$hour < 18), "work_hour", "evening")))
+
+capmetro_1 <- capmetro
+capmetro_1 <- merge(capmetro, grid, by.x = c("veh_lat_rnd", "veh_long_rnd"),
+  by.y = c("start_location_lat", "start_location_long"))
+capmetro_1_gp <- capmetro_1 %>%
+  group_by(dow, start_time_hour, start_grid_cell) %>%
+  summarize(bus_vol = sum(rides_on))
+capmetro_1_gp$wkd_end <- ifelse((capmetro_1_gp$dow == "Sat" |
+  capmetro_1_gp$dow == "Sun"), "weekend", "weekday")
+capmetro_1_gp$hr_cat <- ifelse((capmetro_1_gp$start_time_hour <
+  6), "darkout", ifelse((capmetro_1_gp$start_time_hour >= 6 &
+  capmetro_1_gp$start_time_hour < 12), "rush_hour", ifelse((capmetro_1_gp$start_time_hour >=
+  12 & capmetro_1_gp$start_time_hour < 18), "work_hour", "evening")))
+final_df_1 <- merge(rideshare_1_gp, capmetro_1_gp, by.x = c("wkd_end",
+  "hr_cat", "dow", "hour", 'start_grid_cell'), by.y = c("wkd_end", "hr_cat", "dow",
+  "start_time_hour", 'start_grid_cell'))
+
+reg_1 <- lm(ride_vol ~ bus_vol + wkd_end + hr_cat + start_grid_cell, data = final_df_1)
+summary(reg_1)
 
 ```
+```{r Co2}
+rides <- rideshare_1
+vehicles <- read.csv("vehicles.csv")
+#View(vehicles)
+#View(rides) #distance traveled is in meters
 
-```{r us census}
-#This new file has a few new variables from the US Census American Community Survey (ACS).
-#The census data goes down to the level of census tracts, which are approximately neighborhood-sized, and I was able to map the latitude/longitude onto those census tracts.
-#For us, the important variables were median household income (median_hincome) and population density (ppsm = people per square mile).
-#A final variable is the number of different combinations of locations, days, and hours that a rideshare was requested in a given census tract, represented by the "n_var" variable.
-#This variable is a little tricky to interpret, but I think it speaks to the fact that some areas of the city have not only higher demand for transportation, but more varied demand, and those areas tend to have stronger public transportation use.
-#When I grouped the data by census tract, then, instead oflat/long pair, it gave us a useful amount of aggregation - more specific than a 5x5 grid, but less granular than lat/long.
+vinfo <- vehicles[, c('year', 'make', 'model','co2', 'co2A')]
+#CO2 grams per mile, barrels in barrels per mile, city miles per gallon
 
+vinfo2 <- vinfo %>% group_by(year, make, model) %>% sample_n(1)
+#Due to multiple lines in the vehicles data set take a random sample of one type of year, make, model and assign it to the ride
 
-master_data <- read.csv("master_data_file_with_census_vars.csv")
+dfco2 <- left_join(rides, vinfo2, by=c('year', 'make', 'model'))
+#Vehicle data has multiple types of cars with same year, make, and model
 
-master_data$passgrs_per_ppsm <- master_data$passgrs/master_data$ppsm
+numrows <- nrow(df)
+numNA <- sum(is.na(df$co2))
 
-master_grp <- master_data %>%
-  group_by(tract, ppsm, median_hincome) %>%
-  summarise(start_dist_from_bus = mean(start_dist_from_bus, na.rm=TRUE), passgrs = sum(passgrs, na.rm=TRUE), rides_on = sum(rides_on, na.rm=TRUE), passgrs_per_ppsm = sum(passgrs, na.rm=TRUE)/mean(ppsm, na.rm=TRUE), n_var = n())   #n_var represents variety in use of ridesharing (locations, times of day, and days of week)
+perNa <- numNA/numrows * 100
+#43% of data had NA values
 
-linreg_dow_hour_grp <- lm(rides_on~passgrs + ppsm + median_hincome + n_var, master_grp)
-summary(linreg_dow_hour_grp)
+#Due to us having such a large sample size comfortable estimating volume based solely on rows with car data
+df2 <- dfco2 %>% drop_na(co2)
 
-#The new model is a better predictor of public transportation use, with R2 value of 0.525.
-#Yes, rideshares and public transportation are positively correlated, but the model is still useful in predicting which locations would be best suited for expanding public transportation options.
-#Basically, this model says that we should look for areas that have high rideshare demand, that are densely populated, with lower median income, and with more varied rideshare use (i.e., at many hours of day, days of week, and different lat/long points).
+df2$calcco2 = ifelse(df2$co2 > 0 & df2$co2A > 0 , mean(c(df2$co2,df2$co2A)),
+                      ifelse(df2$co2 > df2$co2A, df2$co2, df2$co2A))
 
+CO2emmited = df2$distance_travelled*0.000621371 * df2$calcco2 #convert meters to miles
+TotalCo2samp <- sum(subset(CO2emmited, CO2emmited >0))*0.001 #Ignore hybrid car rides convert to kilograms
 
-#We can use this model to suggest the best location(s) for new expansion:
-#This gives us a list of locations with no current public transportation use, and predicts the number of public transportation rides that could be gained per six-month period if we expanded into that area.
-possible_loc <- master_grp %>% filter(rides_on == 0)
-possible_loc$pred <- ifelse(predict(linreg_dow_hour_grp, possible_loc)<0, 0, predict(linreg_dow_hour_grp, possible_loc))
-
-#This model would suggest that the best candidate is a neighborhood on the north boundary of CapMetro's service area, an area called Round Rock.
-#I think it's a reasonable suggestion because it's continguous to the current (as of Jan. 2017) service area, and it's right next several college campuses, like Texas A&M and Austin Comm. College.
-#In fact, in March 2017, right after the period that this dataset represents, CapMetro did decide to expand into this area with four new routes, which is a nice confirmation of our analysis.
-#Here's the article: https://cbsaustin.com/news/local/round-rock-to-get-capmetro-bus-service-in-august
-
+totCO2 = TotalCo2samp / length(df2$distance_travelled)*length(rides$distance_travelled) #Volume adjust back to CO2 Estimate
+print(totCO2)
 ```
