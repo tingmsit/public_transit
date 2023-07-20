@@ -71,10 +71,7 @@ print("Total CO2 Emmited is")
 print(totCO2)
 print("km")
 ```
-```{r read_data}
-rideshare <- read.csv('RideAustin_Weather.csv')
-capmetro <- read.csv("CapMetro ridership all by latlong dow hour.csv")
-```
+
 
 ```{r rideshare vs public transportation}
 austin_data <- read.csv("RideAustin_Weather with dow and hour.csv")
@@ -83,10 +80,10 @@ capmetro_rides <- read.csv("CapMetro ridership all by latlong.csv")
 capmetro_dow_hour <- read.csv("CapMetro ridership all by latlong dow hour.csv")
 
 #Shrink dataset to relevant columns
-rideshare = subset(austin_data, select = c(completed_on, started_on, distance_travelled, end_location_lat, end_location_long, start_location_lat, start_location_long, started_dow, started_hour, make, model, year))
+rideshare_sub = subset(austin_data, select = c(completed_on, started_on, distance_travelled, end_location_lat, end_location_long, start_location_lat, start_location_long, started_dow, started_hour, make, model, year))
 
 #Filter rideshare data for rides within general range of public transportation
-rideshares_in_range <- rideshare %>%
+rideshares_in_range <- rideshare_sub %>%
   filter(start_location_lat > 30 & start_location_lat < 30.6
          & start_location_long > -97.8 & start_location_long < -97.5
          & end_location_lat > 30 & end_location_lat < 30.6
@@ -240,6 +237,9 @@ write.csv(merged_data_dow_hour, 'master_data_file.csv')
 
 # Exploratory Analysis
 ```{r exploratory}
+
+rideshare <- read.csv('RideAustin_Weather.csv')
+capmetro <- read.csv("CapMetro ridership all by latlong dow hour.csv")
 
 summary(rideshare)
 # Remove distance which are too long, convert meter to km,
