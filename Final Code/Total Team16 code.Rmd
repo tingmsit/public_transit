@@ -19,6 +19,10 @@ Dowload all other Data files from Github into data folder
 
 ```{r packages}
 rm(list = ls())
+# install.packages('lubridate')
+# install.packages('chron')
+# install.packages('gridExtra')
+
 library(dplyr)
 library(tidyr)
 library(tidyverse)
@@ -69,60 +73,51 @@ print("km")
 ```
 ```{r read_data}
 rideshare <- read.csv('RideAustin_Weather.csv')
-capmetro_dow_hour <- read.csv("CapMetro ridership all by latlong dow hour.csv")
+capmetro <- read.csv("CapMetro ridership all by latlong dow hour.csv")
 ```
 ```{r exploratory}
-#rideshare <- read.csv("RideAustin_Weather.csv")
-#capmetro_dow_hour <- read.csv("CapMetro ridership all by latlong dow hour.csv")
 
 summary(rideshare)
+# Remove distance which are too long, convert meter to km,
+# and create day of week metric
+rideshare <- rideshare %>%
+  filter(distance_travelled < 15000) %>%
+  mutate(dist_km = distance_travelled/1000, dow = wday(ymd(Date),
+    label = TRUE))
 
-rideshare_filter <- rideshare %>%
-  filter(distance_travelled < 15000)
-rideshare_filter$dist_km <- rideshare_filter$distance_travelled/1000
-# Obtain day of week
-rideshare_filter$dow <- wday(mdy(rideshare_filter$Date), label = TRUE)
-# Obtain month
-rideshare_filter$mo <- month(mdy(rideshare_filter$Date), label = TRUE)
 
-# Convert start and end time text into datetime object
+rideshare$start_ts <- as.POSIXct(rideshare$started_on, tz = Sys.timezone())
+rideshare$end_ts <- as.POSIXct(rideshare$completed_on, tz = Sys.timezone())
+rideshare$ts <- difftime(rideshare$end_ts, rideshare$start_ts,
+                         units = "mins")
 
-rideshare_filter$start_ts <- as.POSIXct(rideshare_filter$started_on, format = "%m/%d/%Y %H:%M")
-rideshare_filter$end_ts <- as.POSIXct(rideshare_filter$completed_on, format = "%m/%d/%Y %H:%M")
+# take out trips that last more than 2 hours
+rideshare <- rideshare %>%
+  filter(ts > 0 & ts < 120)
 
-# Obtain hour of the day
-rideshare_filter$hour <- rideshare_filter$start_ts %>%
+rideshare$hour <- rideshare$started_on %>%
+  as.POSIXct(tz = Sys.timezone()) %>%
   hour()
 
-# Calculate time traveled
-rideshare_filter$ts_travel <- difftime(rideshare_filter$end_ts,
-  rideshare_filter$start_ts, units = "mins")
 
-# Limit travel time to be less than 120 minutes
-rideshare_ts <- rideshare_filter %>%
-  filter(ts_travel > 0 & ts_travel < 120)
-
-
-
-
-dist_travel <- ggplot(rideshare_filter, aes(dist_km)) + geom_histogram(binwidth = 1) +
+# exploring ride volume pattern by travel distance
+dist_travel <- ggplot(rideshare, aes(dist_km)) + geom_histogram(binwidth = 1) +
   labs(title = "Distance Traveled Distribution for ride share trips",
     x = "Distance Traveled (km)", y = "# of Trips")
 
-dist_travel_cum <- ggplot(rideshare_filter, aes(dist_km)) + stat_ecdf(geom = "step") +
+dist_travel_cum <- ggplot(rideshare, aes(dist_km)) + stat_ecdf(geom = "step") +
   labs(title = "Cumlative % for ride share trips", x = "Distance Traveled (km)",
     y = "% to total")
 
 grid.arrange(dist_travel, dist_travel_cum, ncol = 2)
 
-
-dist_ts <- ggplot(rideshare_ts, aes(ts_travel)) + stat_ecdf(geom = "step") +
+# exploring ride volume pattern by travel time
+dist_ts <- ggplot(rideshare, aes(ts)) + stat_ecdf(geom = "step") +
   labs(title = "Time Traveled by ride share trips", x = "Time (mins)",
     y = "% to total")
 
-day_count <- ggplot(rideshare_filter, aes(x = dow)) + geom_bar() +
-  labs(title = "Ride share trips distribution by Day", x = "Day of Week",
-    y = "# Trip")
+day_count <- ggplot(rideshare, aes(x = dow)) + geom_bar() + labs(title = "Ride share trips distribution by Day",
+  x = "Day of Week", y = "# Trip")
 
 
 weather_fog <- day_count + facet_grid(vars(Fog)) + labs(title = "Day distribution conditioned on Fog",
@@ -131,11 +126,8 @@ weather_fog <- day_count + facet_grid(vars(Fog)) + labs(title = "Day distributio
 weather_thunder <- day_count + facet_grid(vars(Thunder)) + labs(title = "Day distribution conditioned on Thunder",
   x = "Day", y = "# Trip")
 
-# month_count <- ggplot(rideshare_filter, aes(x = mo)) +
-# geom_bar() month_count
 
-
-hour_count <- ggplot(rideshare_filter, aes(x = hour)) + geom_bar() +
+hour_count <- ggplot(rideshare, aes(x = hour)) + geom_bar() +
   labs(title = "Time of Day", x = "Hour", y = "# of Trip")
 
 
@@ -143,62 +135,55 @@ grid.arrange(hour_count, dist_ts, day_count, ncol = 2, nrow = 2)
 
 grid.arrange(weather_fog, weather_thunder, ncol = 1, nrow = 2)
 
-# rideshare_filter$start_loc <- paste('(',
-# as.character(rideshare_filter$start_location_long) ,',',
-# as.character(rideshare_filter$start_location_lat),')')
-# rideshare_filter$end_loc <- paste('(',
-# as.character(rideshare_filter$end_location_long) ,',',
-# as.character(rideshare_filter$end_location_lat),')')
-# rideshare_filter$from_to <- paste('(',
-# as.character(rideshare_filter$start_loc) ,',',
-# as.character(rideshare_filter$end_loc),')')
 
-# Create a new dataset group by hour and dow and assign new buckets for regression analysis
+# Create a new dataset group by hour and dow and assign new
+# buckets for regression analysis
 
-rideshare_group <- rideshare_filter %>%
+rideshare_gp <- rideshare %>%
   group_by(dow, hour) %>%
-  summarize(vol = n())
-
-rideshare_group$wkd <- ifelse((rideshare_group$dow == "Sun" |
-  rideshare_group$dow == "Sat"), "weekend", "weekday")
-rideshare_group$hr_cat <- ifelse((rideshare_group$hour >= 22 |
-  rideshare_group$hour < 6), "darkout", ifelse((rideshare_group$hour >=
-  6 & rideshare_group$hour < 10), "rush_hour", ifelse((rideshare_group$hour >=
-  10 & rideshare_group$hour < 17), "work_hour", "evening")))
+  summarise(ride_vol = n() * 1.4)
 
 
-daytime_lm <- lm(vol ~ hr_cat + wkd, data = rideshare_group)
-summary(daytime_lm)
-plot(daytime_lm)
+rideshare_gp$wkd_end <- ifelse((rideshare_gp$dow == "Sun" | rideshare_gp$dow ==
+  "Sat"), "weekend", "weekday")
+rideshare_gp$hr_cat <- ifelse((rideshare_gp$hour < 6), "darkout",
+  ifelse((rideshare_gp$hour >= 6 & rideshare_gp$hour < 12),
+    "rush_hour", ifelse((rideshare_gp$hour >= 12 & rideshare_gp$hour <
+      18), "work_hour", "evening")))
+
+
+# check significant of day of week and hour of day
+summary(lm(ride_vol ~ wkd_end + hr_cat, data = rideshare_gp))
 
 # Preparing data for K-S Test
 
-fog_count <- rideshare_filter %>%
+fog_count <- rideshare %>%
   group_by(Fog) %>%
   summarise(n = n()) %>%
   filter(Fog == 1)
-thunder_count <- rideshare_filter %>%
+thunder_count <- rideshare %>%
   group_by(Thunder) %>%
   summarise(n = n()) %>%
   filter(Thunder == 1)
 
-no_fog <- rideshare_filter %>%
+set.seed(123)
+no_fog <- rideshare %>%
   filter(Fog == 0) %>%
   sample_n(size = fog_count$n) %>%
   group_by(dow) %>%
   summarize(n = n())
-fog <- rideshare_filter %>%
+fog <- rideshare %>%
   filter(Fog == 1) %>%
   group_by(dow) %>%
   summarize(n = n())
 ks.test(no_fog$n, fog$n)
 
-no_thunder <- rideshare_filter %>%
+no_thunder <- rideshare %>%
   filter(Thunder == 0) %>%
   sample_n(size = thunder_count$n) %>%
   group_by(dow) %>%
   summarize(n = n())
-thunder <- rideshare_filter %>%
+thunder <- rideshare %>%
   filter(Thunder == 1) %>%
   group_by(dow) %>%
   summarize(n = n())
@@ -206,23 +191,12 @@ ks.test(no_thunder$n, thunder$n)
 
 # capmetro exploratory
 
-bus_dow <- capmetro_dow_hour %>%
-  group_by(start_time_dayofwk) %>%
-  summarize(ride = sum(rides_on), n = n()) %>%
-  mutate(dow = wday(start_time_dayofwk, label = TRUE))
 
-dow_ride <- ggplot(bus_dow, aes(dow, ride)) + geom_bar(stat = "identity") +
-  labs(title = "Ride Volume by Day", x = "Day of Week", y = "# Passengers")
-
-dow_count <- ggplot(bus_dow, aes(dow, n)) + geom_bar(stat = "identity") +
-  labs(title = "Est. Bus Count by Day", x = "Day of Week", y = "Est. Bus Count")
-
-grid.arrange(dow_ride, dow_count, ncol = 2)
-
-
-bus_hr <- capmetro_dow_hour %>%
+bus_hr <- capmetro %>%
   group_by(start_time_hour) %>%
-  summarize(ride = sum(rides_on), n = n()) %>% mutate
+  summarize(ride = sum(rides_on), n = n())
+
+# explore bus ride pattern driven by hour of the day
 
 hr_ride <- ggplot(bus_hr, aes(start_time_hour, ride)) + geom_bar(stat = "identity") +
   labs(title = "Ride Volume by Hour", x = "Hour", y = "# Passengers")
@@ -232,17 +206,102 @@ hr_count <- ggplot(bus_hr, aes(start_time_hour, n)) + geom_bar(stat = "identity"
 
 grid.arrange(hr_ride, hr_count, ncol = 2)
 
-bus_hr_dow <- capmetro_dow_hour %>%
+# explore bus ride pattern driven by day of week
+bus_hr_dow <- capmetro %>%
   group_by(start_time_dayofwk, start_time_hour) %>%
-  summarize(ride = sum(rides_on), n = n()) %>%   mutate(dow = wday(start_time_dayofwk, label = TRUE))
+  summarize(ride = sum(rides_on), n = n()) %>%
+  mutate(dow = wday(start_time_dayofwk, label = TRUE))
 
-bus_share <- merge(bus_hr_dow, rideshare_group, by.x = c('start_time_hour', 'dow'), by.y = c('hour', 'dow'))
-# lm_bus_share <- lm(vol ~ ride + hr_cat, data=bus_share)
-# summary(lm_bus_share)
+bus_dow <- capmetro %>%
+  group_by(start_time_dayofwk) %>%
+  summarize(ride = sum(rides_on), n = n()) %>%
+  mutate(dow = wday(start_time_dayofwk, label = TRUE))
+
+dow_ride <- ggplot(bus_dow, aes(dow, ride)) + geom_bar(stat = "identity") +
+  labs(title = "Ride Volume by Day", x = "Day of Week", y = "# Passengers")
+
+dow_count <- ggplot(bus_dow, aes(dow, n)) + geom_bar(stat = "identity") +
+  labs(title = "Est. Bus Count by Day", x = "Day of Week",
+    y = "Est. Bus Count")
+
+grid.arrange(dow_ride, dow_count, ncol = 2)
+
+# modifying dataset to mimic rideshare datase to prepare
+# for merge
+
+capmetro$dow <- substr(weekdays(as.Date("2017-01-01") + capmetro$start_time_dayofwk),
+  1, 3)
+capmetro_gp <- capmetro %>%
+  group_by(dow, start_time_hour) %>%
+  summarize(bus_vol = sum(rides_on))
+capmetro_gp$wkd_end <- ifelse((capmetro_gp$dow == "Sat" | capmetro_gp$dow ==
+  "Sun"), "weekend", "weekday")
+capmetro_gp$hr_cat <- ifelse((capmetro_gp$start_time_hour < 6),
+  "darkout", ifelse((capmetro_gp$start_time_hour >= 6 & capmetro_gp$start_time_hour <
+    12), "rush_hour", ifelse((capmetro_gp$start_time_hour >=
+    12 & capmetro_gp$start_time_hour < 18), "work_hour",
+    "evening")))
 
 
-# Testing if rides volume is correlated to bus ride
-cor.test(bus_share$vol, bus_share$ride, method='pearson')
+# combine bus and rideshare dataset to prepare for
+# regression
+final_df <- merge(rideshare_gp, capmetro_gp, by.x = c("wkd_end",
+  "hr_cat", "dow", "hour"), by.y = c("wkd_end", "hr_cat", "dow",
+  "start_time_hour"))
+
+# Correlation test
+cor.test(final_df$bus_vol, final_df$ride_vol)
+
+# Regression to check significant on the independent
+# variables
+
+reg <- lm(ride_vol ~ bus_vol + wkd_end + hr_cat, data = final_df)
+summary(reg)
+
+
+# adding grid to both rideshare and capmetro dataset
+grid_map <- read.csv("../Data/master_data_file.csv")
+grid <- unique(grid_map[, c("start_location_lat", "start_location_long",
+  "start_grid_cell")])
+
+# Note some trips will be dropped as they fall outside the
+# 5x5 grid
+rideshare_1 <- merge(rideshare, grid, by = c("start_location_long",
+  "start_location_lat"))
+
+
+rideshare_1_gp <- rideshare_1 %>%
+  group_by(dow, hour, start_grid_cell) %>%
+  summarise(ride_vol = n() * 1.4)
+
+
+rideshare_1_gp$wkd_end <- ifelse((rideshare_1_gp$dow == "Sun" |
+  rideshare_1_gp$dow == "Sat"), "weekend", "weekday")
+rideshare_1_gp$hr_cat <- ifelse((rideshare_1_gp$hour < 6), "darkout",
+  ifelse((rideshare_1_gp$hour >= 6 & rideshare_1_gp$hour <
+    12), "rush_hour", ifelse((rideshare_1_gp$hour >= 12 &
+    rideshare_1_gp$hour < 18), "work_hour", "evening")))
+
+capmetro_1 <- capmetro
+capmetro_1 <- merge(capmetro, grid, by.x = c("veh_lat_rnd", "veh_long_rnd"),
+  by.y = c("start_location_lat", "start_location_long"))
+capmetro_1_gp <- capmetro_1 %>%
+  group_by(dow, start_time_hour, start_grid_cell) %>%
+  summarize(bus_vol = sum(rides_on))
+capmetro_1_gp$wkd_end <- ifelse((capmetro_1_gp$dow == "Sat" |
+  capmetro_1_gp$dow == "Sun"), "weekend", "weekday")
+capmetro_1_gp$hr_cat <- ifelse((capmetro_1_gp$start_time_hour <
+  6), "darkout", ifelse((capmetro_1_gp$start_time_hour >= 6 &
+  capmetro_1_gp$start_time_hour < 12), "rush_hour", ifelse((capmetro_1_gp$start_time_hour >=
+  12 & capmetro_1_gp$start_time_hour < 18), "work_hour", "evening")))
+final_df_1 <- merge(rideshare_1_gp, capmetro_1_gp, by.x = c("wkd_end",
+  "hr_cat", "dow", "hour", "start_grid_cell"), by.y = c("wkd_end",
+  "hr_cat", "dow", "start_time_hour", "start_grid_cell"))
+
+reg_1 <- lm(ride_vol ~ bus_vol + wkd_end + hr_cat + start_grid_cell,
+  data = final_df_1)
+summary(reg_1)
+
 ```
 
 ```{r rideshare vs public transportation}
@@ -406,148 +465,7 @@ summary(linreg_dow_hour)
 
 write.csv(merged_data_dow_hour, 'master_data_file.csv')
 ```
-```{r gridregression}
-df <- read.csv("RideAustin_Weather.csv")
 
-summary(df)
-# Remove distance which are too long, convert meter to km, and create day of week metric
-rideshare <- df %>%
-  filter(distance_travelled < 15000) %>%
-  mutate(dist_km = distance_travelled/1000, dow = wday(mdy(Date),
-    label = TRUE))
-
-rideshare$start_ts <- as.POSIXct(rideshare_filter$started_on, format = "%m/%d/%Y %H:%M")
-rideshare$end_ts <- as.POSIXct(rideshare_filter$completed_on, format = "%m/%d/%Y %H:%M")
-rideshare$ts <- difftime(rideshare$end_ts, rideshare$start_ts,
-  units = "mins")
-
-# take out trips that last more than 2 hours
-rideshare <- rideshare %>%
-  filter(ts > 0 & ts < 120)
-
-rideshare$hour <- rideshare$started_on %>%
-  as.POSIXct(format = "%m/%d/%Y %H:%M") %>%
-  hour()
-
-
-rideshare_gp <- rideshare %>%
-  group_by(dow, hour) %>%
-  summarise(ride_vol = n() * 1.4)
-
-
-rideshare_gp$wkd_end <- ifelse((rideshare_gp$dow == "Sun" | rideshare_gp$dow ==
-  "Sat"), "weekend", "weekday")
-rideshare_gp$hr_cat <- ifelse((rideshare_gp$hour < 6), "darkout",
-  ifelse((rideshare_gp$hour >= 6 & rideshare_gp$hour < 12),
-    "rush_hour", ifelse((rideshare_gp$hour >= 12 & rideshare_gp$hour <
-      18), "work_hour", "evening")))
-
-# check significant of day of week and hour of day
-summary(lm(ride_vol ~ wkd_end + hr_cat, data = rideshare_gp))
-
-# K-S Test
-fog_count <- rideshare %>%
-  group_by(Fog) %>%
-  summarise(n = n()) %>%
-  filter(Fog == 1)
-thunder_count <- rideshare %>%
-  group_by(Thunder) %>%
-  summarise(n = n()) %>%
-  filter(Thunder == 1)
-
-set.seed(123)
-no_fog <- rideshare %>%
-  filter(Fog == 0) %>%
-  sample_n(size = fog_count$n) %>%
-  group_by(dow) %>%
-  summarize(n = n())
-fog <- rideshare %>%
-  filter(Fog == 1) %>%
-  group_by(dow) %>%
-  summarize(n = n())
-ks.test(no_fog$n, fog$n)
-
-no_thunder <- rideshare %>%
-  filter(Thunder == 0) %>%
-  sample_n(size = thunder_count$n) %>%
-  group_by(dow) %>%
-  summarize(n = n())
-thunder <- rideshare %>%
-  filter(Thunder == 1) %>%
-  group_by(dow) %>%
-  summarize(n = n())
-ks.test(no_thunder$n, thunder$n)
-
-# Bus ride dataset
-
-capmetro <- read.csv("CapMetro ridership all by latlong dow hour.csv")
-capmetro$dow <- substr(weekdays(as.Date("2017-01-01") + capmetro$start_time_dayofwk),
-  1, 3)
-capmetro_gp <- capmetro %>%
-  group_by(dow, start_time_hour) %>%
-  summarize(bus_vol = sum(rides_on))
-capmetro_gp$wkd_end <- ifelse((capmetro_gp$dow == "Sat" | capmetro_gp$dow ==
-  "Sun"), "weekend", "weekday")
-capmetro_gp$hr_cat <- ifelse((capmetro_gp$start_time_hour < 6),
-  "darkout", ifelse((capmetro_gp$start_time_hour >= 6 & capmetro_gp$start_time_hour <
-    12), "rush_hour", ifelse((capmetro_gp$start_time_hour >=
-    12 & capmetro_gp$start_time_hour < 18), "work_hour",
-    "evening")))
-
-# combine bus and rideshare dataset to prepare for regression
-final_df <- merge(rideshare_gp, capmetro_gp, by.x = c("wkd_end",
-  "hr_cat", "dow", "hour"), by.y = c("wkd_end", "hr_cat", "dow",
-  "start_time_hour"))
-
-# Correlation test
-cor.test(final_df$bus_vol, final_df$ride_vol)
-
-
-reg <- lm(ride_vol ~ bus_vol + wkd_end + hr_cat, data = final_df)
-summary(reg)
-
-# adding grid to both rideshare and capmetro dataset
-grid_map <- read.csv("master_data_file.csv")
-grid <- unique(grid_map[, c("start_location_lat", "start_location_long",
-                            "start_grid_cell")])
-
-# Note some trips will be dropped as they fall outside the 5x5 grid
-rideshare_1 <- merge(rideshare, grid, by = c("start_location_long",
-  "start_location_lat"))
-
-
-rideshare_1_gp <- rideshare_1 %>%
-  group_by(dow, hour, start_grid_cell) %>%
-  summarise(ride_vol = n() * 1.4)
-
-
-rideshare_1_gp$wkd_end <- ifelse((rideshare_1_gp$dow == "Sun" |
-  rideshare_1_gp$dow == "Sat"), "weekend", "weekday")
-rideshare_1_gp$hr_cat <- ifelse((rideshare_1_gp$hour < 6), "darkout",
-  ifelse((rideshare_1_gp$hour >= 6 & rideshare_1_gp$hour <
-    12), "rush_hour", ifelse((rideshare_1_gp$hour >= 12 &
-    rideshare_1_gp$hour < 18), "work_hour", "evening")))
-
-capmetro_1 <- capmetro
-capmetro_1 <- merge(capmetro, grid, by.x = c("veh_lat_rnd", "veh_long_rnd"),
-  by.y = c("start_location_lat", "start_location_long"))
-capmetro_1_gp <- capmetro_1 %>%
-  group_by(dow, start_time_hour, start_grid_cell) %>%
-  summarize(bus_vol = sum(rides_on))
-capmetro_1_gp$wkd_end <- ifelse((capmetro_1_gp$dow == "Sat" |
-  capmetro_1_gp$dow == "Sun"), "weekend", "weekday")
-capmetro_1_gp$hr_cat <- ifelse((capmetro_1_gp$start_time_hour <
-  6), "darkout", ifelse((capmetro_1_gp$start_time_hour >= 6 &
-  capmetro_1_gp$start_time_hour < 12), "rush_hour", ifelse((capmetro_1_gp$start_time_hour >=
-  12 & capmetro_1_gp$start_time_hour < 18), "work_hour", "evening")))
-final_df_1 <- merge(rideshare_1_gp, capmetro_1_gp, by.x = c("wkd_end",
-  "hr_cat", "dow", "hour", 'start_grid_cell'), by.y = c("wkd_end", "hr_cat", "dow",
-  "start_time_hour", 'start_grid_cell'))
-
-reg_1 <- lm(ride_vol ~ bus_vol + wkd_end + hr_cat + start_grid_cell, data = final_df_1)
-summary(reg_1)
-
-```
 ```{r Co2}
 rides <- rideshare_1
 vehicles <- read.csv("vehicles.csv")
