@@ -2,12 +2,10 @@ library(dplyr)
 library(tidyr)
 library(tidyverse)
 
-
 rides <- read.csv("RideAustin_Weather.csv")
 vehicles <- read.csv("vehicles.csv")
-View(vehicles)
-View(rides) #distance traveled is in meters
-
+#View(vehicles)
+#View(rides) #distance traveled is in meters
 
 vinfo <- vehicles[, c('year', 'make', 'model', 'barrels08', 'barrelsA08', 'city08', 'cityA08', 'co2', 'co2A')]
 #CO2 grams per mile, barrels in barrels per mile, city miles per gallon
@@ -27,20 +25,12 @@ perNa <- numNA/numrows * 100
 #Due to us having such a large sample size comfortable estimating volume based solely on rows with car data
 df2 <- df %>% drop_na(co2)
 
-df2$calcbarrel = ifelse(df2$barrels08 > 0 & df2$barrelsA08 > 0 , mean(c(df2$barrels08,df2$barrelsA08)),
-                      ifelse(df2$barrels08 > df2$barrelsA08, df2$barrels08, df2$barrelsA08))
-
-df2$calccity = ifelse(df2$city08 > 0 & df2$cityA08 > 0 , mean(c(df2$city08,df2$cityA08)),
-                        ifelse(df2$city08 > df2$cityA08, df2$city08, df2$cityA08))
-
 df2$calcco2 = ifelse(df2$co2 > 0 & df2$co2A > 0 , mean(c(df2$co2,df2$co2A)),
                       ifelse(df2$co2 > df2$co2A, df2$co2, df2$co2A))
 
 CO2emmited = df2$distance_travelled*0.000621371 * df2$calcco2 #convert meters to miles
 TotalCo2samp <- sum(subset(CO2emmited, CO2emmited >0))*0.001 #Ignore hybrid car rides convert to kilograms
 
-barrelsused = df2$distance_travelled*0.000621371 * df2$calcbarrel
-TotalBarrellssamp <- sum(barrelsused) #Ignore hybrid car rides
+totCO2 = TotalCo2samp / length(df2$distance_travelled)*length(rides$distance_travelled) #Volume adjust back to CO2 Estimate
 
-totC02 = TotalCo2samp / length(df2$distance_travelled)*length(rides$distance_travelled)
 
