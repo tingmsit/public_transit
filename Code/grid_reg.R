@@ -12,6 +12,7 @@ library(fuzzyjoin)
 df <- read.csv("../Data/RideAustin_Weather.csv")
 
 summary(df)
+# Remove distance which are too long, convert meter to km, and create day of week metric
 rideshare <- df %>%
   filter(distance_travelled < 15000) %>%
   mutate(dist_km = distance_travelled/1000, dow = wday(ymd(Date),
@@ -21,6 +22,8 @@ rideshare$start_ts <- as.POSIXct(rideshare$started_on, tz = Sys.timezone())
 rideshare$end_ts <- as.POSIXct(rideshare$completed_on, tz = Sys.timezone())
 rideshare$ts <- difftime(rideshare$end_ts, rideshare$start_ts,
   units = "mins")
+
+# take out trips that last more than 2 hours
 rideshare <- rideshare %>%
   filter(ts > 0 & ts < 120)
 
@@ -41,7 +44,7 @@ rideshare_gp$hr_cat <- ifelse((rideshare_gp$hour < 6), "darkout",
     "rush_hour", ifelse((rideshare_gp$hour >= 12 & rideshare_gp$hour <
       18), "work_hour", "evening")))
 
-
+# check significant of day of week and hour of day
 summary(lm(ride_vol ~ wkd_end + hr_cat, data = rideshare_gp))
 
 # K-S Test
@@ -93,12 +96,14 @@ capmetro_gp$hr_cat <- ifelse((capmetro_gp$start_time_hour < 6),
     12 & capmetro_gp$start_time_hour < 18), "work_hour",
     "evening")))
 
-
+# combine bus and rideshare dataset to prepare for regression
 final_df <- merge(rideshare_gp, capmetro_gp, by.x = c("wkd_end",
   "hr_cat", "dow", "hour"), by.y = c("wkd_end", "hr_cat", "dow",
   "start_time_hour"))
 
+# Correlation test
 cor.test(final_df$bus_vol, final_df$ride_vol)
+
 
 reg <- lm(ride_vol ~ bus_vol + wkd_end + hr_cat, data = final_df)
 summary(reg)
