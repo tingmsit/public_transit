@@ -48,4 +48,5 @@ Combining with additional data on median income, population density, transportat
 Obtainin more precise coordinate data, incorporate of consumer behavior data and expand data time horizon become the next steps for this study to improve on the impact estimation.
 
 [Final Report](https://github.com/tingmsit/public_transit/blob/main/Final%20Report/Final%20Project%20Report.pdf)
+
 [Presentation](https://github.com/tingmsit/public_transit/blob/main/Final%20Presentation%20Slides/Presentation_pdf.pdf)
