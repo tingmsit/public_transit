@@ -20,12 +20,16 @@
 - [Austin Rideshare Dataset](https://data.world/andytryba/rideaustin)
     - For the ease of access, a copy had been stored on Google Drive[link1](https://drive.google.com/file/d/1So7yjkI9CH5lsOSpNEBhnbv1dQ9Y9wyn/view?usp=sharing)[link2](https://drive.google.com/file/d/1ZBCS-ZanrbCJDVKR1r4uJJP4DwThBwt_/view?usp=sharing)
 - [Vechicle Data](https://drive.google.com/file/d/1muf-yYBPGps-2Wtx2v2qN_XtecUi6VgL/view?usp=sharing)
-- The rest of the data can be downloaded directly from [Data](https://github.com/MGT-6203-Summer-2023-Edx/Team-16/tree/main/Data) folder within this repository.
+- The rest of the data can be downloaded directly from [Data](https://github.com/tingmsit/public_transit/tree/main/Data) folder within this repository.
 
 ### Outline of Approach
 
 1. Exploratory analysis on rideshare - identify potential independent variables which may explain the passenger behaviors using rideshares
 2. Distance variable - Euclidean measurement to find average distance of the n-nearest bus stops vs rideshares usage location. This may serve as an important variables for understanding accessibility factor
 3. Exploratory analysis on bus ride dataset - similiar to rideshare data, seek to understand if usage pattern could be similar/different from rideshare.
-4. Correlation and Significant Tests: check if any variables identified from exploratory analysis
+4. Correlation and Significant Tests: check if any independent variables identified from exploratory analysis are significant on explaining potential relationship among public transit and ride share.
+
+### Detail Code Execution
+- See [Code Run] file
+
 
