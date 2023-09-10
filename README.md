@@ -30,6 +30,22 @@
 4. Correlation and Significant Tests: check if any independent variables identified from exploratory analysis are significant on explaining potential relationship among public transit and ride share.
 
 ### Detail Code Execution
-- See [Code Run] file
+- See [Code Run](https://github.com/tingmsit/public_transit/blob/main/Final%20Code/code_run.Rmd) file
 
 
+### Findings/Recommendations
+
+By controlling on weekend/weekdays, hour of the day, and location within Austin (divided into 25 grid), significant negative correlation is found among bus service and rideshare services with around **-4%**
+
+Combining with additional data on median income, population density, transportation variety demand, identify 9 census tracts in the north boundary of Austin as opportunities for bus services expansion. Should bus services be expanded to those areas, study indicates **156k** car trips (include rideshares) could be replaced annually, which translate to **98 tons** of carbon reduction.
+
+### Challenges/Next Steps
+
+1. the imprecision of the coordinate data for the rideshare dataset are not sufficient to extract meaningful distances information. Hence distance variable calculated in this study was not a significant factor.
+2. Demographic, consumer behavior and preference data are not included, which could be major factors on driving publich transit adoptions.
+3. Time series factor of Austin growing population is not captured as data only include 1 year of history.
+
+Obtainin more precise coordinate data, incorporate of consumer behavior data and expand data time horizon become the next steps for this study to improve on the impact estimation.
+
+[Final Report](https://github.com/tingmsit/public_transit/blob/main/Final%20Report/Final%20Project%20Report.pdf)
+[Presentation](
