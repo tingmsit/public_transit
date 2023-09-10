@@ -1,5 +1,6 @@
 # Public Transit and Rideshare Services Relationship in Austin Texas
  
+**Collaborators**: Jeffrey Finucane, Justin Heinzekehr, Jingya Ye, Ting Sit, Warren Ehrenfried
  
  ### Objective:
  
